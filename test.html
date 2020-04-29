@@ -1,0 +1,87 @@
+<?doctype html>
+<html>
+	<style>
+		body, #c, textarea {padding: 5px;}
+		textarea, input { 
+			margin-left:5%;
+			width: 90%; height:8em;
+			overflow: auto;
+		}
+		#c{
+			font-family: monospace;
+			margin-left:5%;
+			width:90%;
+			background-color: #ccc;
+		}
+		.err { color: darkred; }
+		.err::before { content:"\2717  "; }
+		.ok { color: darkgreen; }
+		.ok::before { content:"\2713  "; }
+		.info::before { content:"\b7   "; }
+	</style>
+	<body>
+		<h2>Ad hoc tests:</h2>
+		<form onsubmit="performAdhocTest(); return false;">
+			<textarea placeholder="Enter UTF-8 text here to hash"></textarea><br>
+			<input type="submit" value="Test">
+		</form>
+		<h2>Test results:</h2>
+		<div id="c"></div>
+	</body>
+
+	<!-- Test to see if any global variables are leaked by the implementation
+		 (omitting var, let or const keywords shrinks code further but is sloppy to say the least) -->
+	<script>let globals = Object.keys(window);</script>
+	<script src="hacher-menu.min.js"></script>
+	<script>let leaked = Object.keys(window).filter(key=>key!='sha256'&&globals.indexOf(key)==-1);</script>
+	
+	<script>
+
+		function log(level, msg) {
+			var div = document.createElement("div");
+			div.className=level;
+			div.innerHTML=msg;
+			document.getElementById('c').appendChild(div);			
+		}
+
+		if (leaked.length) {
+			log('err', "Leaked variables: " + leaked);
+		} else {
+			log('ok', "The script has not leaked any variables");
+		}
+
+		function performAdhocTest(e) {
+			performTest({type:'UTF8',value:document.getElementsByTagName('textarea')[0].value});
+		}
+		async function performTest(test) {
+			try {
+				var res;
+				if (test.type == 'UTF8') {
+					res = sha256(new TextEncoder().encode(test.value));
+				} else {
+					var res = await fetch(test.value).then(r=>r.arrayBuffer()).then(b=>new Uint8Array(b));
+					res = sha256(res);
+				}
+				if (test.expected) {
+					if (res == test.expected) {
+						log('ok', `${test.type} test '${test.value}' correctly hashed to ${res}`);
+					} else {
+						log('err', `${test.type} test '${test.value}' hashed to ${res} instead of ${test.expected}`);
+					}
+				} else {
+					log('info', `UTF-8 value of '${test.value.replace(/\n/g,'\\n')}' hashes to ${res}`);
+				}
+			} catch (e) {
+				log('err', `Error running test: ${e}`);
+			}
+		}
+		[
+			{type:"UTF8",value:"",expected:"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+			{type:"UTF8",value:"Hello, world!",expected:"315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3"},
+			{type:"UTF8",value:"The quick brown fox jumps over the lazy dog",expected:"d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"},
+			{type:"Binary",value:"lenna.png",expected:"7e497501a28bcf9a353ccadf6eb9216bf098ac32888fb542fb9bfe71d486761f"},
+		].forEach(performTest);
+
+
+	</script>
+</html>
